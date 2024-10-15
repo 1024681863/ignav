@@ -9,12 +9,14 @@
 /* constants/macros ----------------------------------------------------------*/
 #define NUMBYTES_GI310  43                      /* numbers of bytes of gi310 imu raw data */
 #define MAXDIFFTIME     10.0                    /* max time difference to reset  */
+#define NUMBYTES_ZHUFENG  32                      /* numbers of bytes of gi310 imu raw data */
 const unsigned char gi310_head[2]={0x55,0xAA};  /* imu message header */
-
+const unsigned char zhufeng_head[2]={0x24,0x49};  /* imu message header */
 /* get fields (little-endian) ------------------------------------------------*/
 #define U1(p) (*((unsigned char *)(p)))
 #define I1(p) (*((char *)(p)))
-
+#define EPSILON             2.2204460492503131e-016                 ///< epsilon == DBL_EPSILON
+#define isEqual(a,b)        (fabs(a-b)<EPSILON ? true : false)      ///< a == b
 /* get fields (little-endian) ------------------------------------------------*/
 static unsigned short U2(unsigned char *p) {unsigned short u; memcpy(&u,p,2); return u;}
 static unsigned int   U4(unsigned char *p) {unsigned int   u; memcpy(&u,p,4); return u;}
@@ -22,6 +24,9 @@ static short          I2(unsigned char *p) {short          i; memcpy(&i,p,2); re
 static int            I4(unsigned char *p) {int            i; memcpy(&i,p,4); return i;}
 static float          R4(unsigned char *p) {float          r; memcpy(&r,p,4); return r;}
 static double         R8(unsigned char *p) {double         r; memcpy(&r,p,8); return r;}
+static char           C1(unsigned char *p) {char         c; memcpy(&c,p,1); return c;}
+static unsigned char  UC1(unsigned char *p) {unsigned char         c; memcpy(&c,p,1); return c;}
+static bool           B1(unsigned char *p){ bool         b;memcpy(&b,p,1);return b;}
 
 /* for odometry option--------------------------------------------------------*/
 static double res=2048; /* odometry resolution */
@@ -38,11 +43,10 @@ static int chkhead(const unsigned char *buff, const unsigned char* head)
     return (buff[0]==head[0])&&(buff[1]==head[1]);
 }
 /* checksum ------------------------------------------------------------------*/
-static unsigned char chksum(const unsigned char *buff, int len)
-{
+static unsigned char chksum(const unsigned char *buff, int len) {
     int i;
     unsigned char sum=0;
-    for (i=0;i<len;i++) sum+=buff[i]; return sum;
+    for (i=0;i<len;i++)sum+=buff[i];return sum;
 }
 /* decode imu time------------------------------------------------------------*/
 static void decode_sow_time(raw_t *raw,double *sow,int *start)
@@ -157,6 +161,109 @@ static int decode_imu_m39(raw_t *raw, unsigned char data)
         raw->nbyte=0; return -1; /* checksum fail */
     }
 }
+
+static int decode_imu_zhufeng(raw_t *raw, unsigned char data)
+{
+    trace(3,"decode_imu_zhufeng:\n");
+
+    raw->buff[raw->nbyte++]=data;
+
+    if (!raw->m_FFSHead.flag){
+    if (raw->nbyte<512) return 0; /* synchronize frame */
+    if (chkhead(raw->buff,zhufeng_head)) {
+        // Read IMR File Head Part
+        memcpy(raw->m_FFSHead.szHeader,raw->buff+0,8);
+        raw->m_FFSHead.bIsIntelOrMotorola=C1(raw->buff+8);
+        raw->m_FFSHead.dVersionNumber=R8(raw->buff+9);
+        raw->m_FFSHead.bDeltaTheta=I4(raw->buff+17);
+        raw->m_FFSHead.bDeltaVelocity=I4(raw->buff+21);
+        raw->m_FFSHead.dDataRateHz=R8(raw->buff+25);
+        raw->m_FFSHead.dGyrosScaleFactor=R8(raw->buff+33);
+        raw->m_FFSHead.dAccelScaleFactor=R8(raw->buff+41);
+        raw->m_FFSHead.iUtcOrGpsTime=I4(raw->buff+49);
+        raw->m_FFSHead.iRcvTimeOrCorrTime=I4(raw->buff+53);
+        raw->m_FFSHead.dTimeTagBias=R8(raw->buff+57);
+        memcpy(raw->m_FFSHead.szImuName,raw->buff+65,32);
+        raw->m_FFSHead.bDirValid=B1(raw->buff+97);
+        raw->m_FFSHead.ucX=UC1(raw->buff+98);
+        raw->m_FFSHead.ucY=UC1(raw->buff+99);
+        raw->m_FFSHead.ucZ=UC1(raw->buff+100);
+        memcpy(raw->m_FFSHead.szProgramName,raw->buff+101,32);
+        raw->m_FFSHead.tCreate.year=I2(raw->buff+133);
+        raw->m_FFSHead.tCreate.month=I2(raw->buff+135);
+        raw->m_FFSHead.tCreate.day=I2(raw->buff+137);
+        raw->m_FFSHead.tCreate.hour=I2(raw->buff+139);
+        raw->m_FFSHead.tCreate.minute=I2(raw->buff+141);
+        raw->m_FFSHead.tCreate.second=I2(raw->buff+143);
+        if (raw->m_FFSHead.tCreate.year < 50)
+            raw->m_FFSHead.tCreate.year += 2000;
+        else
+            raw->m_FFSHead.tCreate.year += 1900;
+        raw->m_FFSHead.bLeverArmValid=B1(raw->buff+145);
+        raw->m_FFSHead.lXoffset=I4(raw->buff+146);
+        raw->m_FFSHead.lYoffset=I4(raw->buff+150);
+        raw->m_FFSHead.lZoffset=I4(raw->buff+154);
+        memcpy(raw->m_FFSHead.Reserved,raw->buff+158,354);
+        raw->m_FFSHead.flag=1;
+        raw->nbyte=0;
+        return 0;
+    }
+    }
+    if (raw->nbyte<NUMBYTES_ZHUFENG) return 0;
+    raw->nbyte=0;
+    int i,week=0;
+    unsigned int dc=0;
+    static int start=0;
+    static double sow=0.0;
+    gtime_t t0;
+    time2gpst(raw->time,&week);
+    trace(3,"decode_imu_data:\n");
+
+    raw->imut.n=0;
+    IE84_INS_type imrData;
+    /* decode GPS sow (s) */
+    sow=R8(raw->buff+0);
+    imrData.gx= I4(raw->buff+8);
+    imrData.gy= I4(raw->buff+12);
+    imrData.gz= I4(raw->buff+16);
+    imrData.ax= I4(raw->buff+20);
+    imrData.ay= I4(raw->buff+24);
+    imrData.az= I4(raw->buff+28);
+    if (sow > 604800) sow -= 604800;
+    // The unit of outputs (gx, gy, gz) for imr files is deg/s
+    raw->insData.gt = sow;
+    raw->insData.gx = imrData.gx * raw->m_FFSHead.dGyrosScaleFactor * raw->m_FFSHead.dDataRateHz;
+    raw->insData.gy = imrData.gy * raw->m_FFSHead.dGyrosScaleFactor * raw->m_FFSHead.dDataRateHz;
+    raw->insData.gz = imrData.gz * raw->m_FFSHead.dGyrosScaleFactor * raw->m_FFSHead.dDataRateHz;
+    raw->insData.ax = imrData.ax * raw->m_FFSHead.dAccelScaleFactor * raw->m_FFSHead.dDataRateHz;
+    raw->insData.ay = imrData.ay * raw->m_FFSHead.dAccelScaleFactor * raw->m_FFSHead.dDataRateHz;
+    raw->insData.az = imrData.az * raw->m_FFSHead.dAccelScaleFactor * raw->m_FFSHead.dDataRateHz;
+    // Correct the time offset
+    raw->insData.gt -= (raw->m_FFSHead.dTimeTagBias * 0.001);
+
+    if (raw->insData.gt > raw->insData.gtPre)
+    {  raw->imu.time= gpst2time(week,raw->insData.gt);
+       raw->imu.gyro[0] = raw->insData.gx;raw->imu.gyro[1] = raw->insData.gy;raw->imu.gyro[2] = raw->insData.gz;
+       raw->imu.accl[0] = raw->insData.ax;raw->imu.accl[1] = raw->insData.ay;raw->imu.accl[2] = raw->insData.az;
+       raw->insData.gtPre = raw->insData.gt;
+    }
+    else if (isEqual(raw->insData.gt,raw->insData.gtPre))
+    {
+        trace(3,"IMU data: data duplication --- %.4f.\n", raw->insData.gt);
+        return 0;
+    }
+    else
+    {    /* current and precious time difference is too large */
+        trace(3, "IMU data: previous %.4f is greater than current %.4f.\n", raw->insData.gtPre, raw->insData.gt);
+        return 0;
+    }
+    /* add imu measurement data */
+    addimudata(&raw->imut,&raw->imu);
+    return raw->insData.gt>0.0?4:0;
+
+}
+
+
 /* input imu raw data in backward--------------------------------------------*/
 static int nextimub(const imu_t *imu,imu_t *data,int *index)
 {
@@ -178,6 +285,22 @@ static int decode_imu_m39b(raw_t *raw, unsigned char data)
     raw->imut.n=0;
     return nextimub(&raw->imub,&raw->imut,&raw->curb);
 }
+static int decode_imu_zhufengb(raw_t *raw, unsigned char data)
+{
+    if (raw->imub.n==0) {
+        prcopt_t *opt=(prcopt_t *)raw->optp;
+        stream_t *str=(stream_t *)raw->strp;
+        readimub(str->path,&raw->imub,opt->insopt.imudecfmt,opt->insopt.imuformat,
+                 opt->insopt.imucoors,opt->insopt.imuvalfmt);
+
+        raw->curb=raw->imub.n-1;
+    }
+    raw->imut.n=0;
+    return nextimub(&raw->imub,&raw->imut,&raw->curb);
+}
+
+
+
 /* input imu raw message -----------------------------------------------------
  * args   : raw_t *raw         IO     receiver raw data control struct
  *          unsigned char data I stream data (1 byte)
@@ -190,6 +313,21 @@ extern int input_m39(raw_t *raw, unsigned char data)
     if (raw->dire) return decode_imu_m39b(raw,data);
     else           return decode_imu_m39 (raw,data);
 }
+
+extern int  input_zhufeng_raw(raw_t *raw, unsigned char data)
+{
+    trace(3," input_zhufeng_raw: data=%02X\n",data);
+    raw->len=NUMBYTES_ZHUFENG;
+    if (raw->dire) return decode_imu_zhufengb(raw,data);
+    else           return decode_imu_zhufeng(raw,data);
+}
+
+
+
+
+
+
+
 /* input imu raw message from file --------------------------------------------
 * input next imu raw message from file
 * args   : raw_t  *raw   IO     receiver raw data control struct

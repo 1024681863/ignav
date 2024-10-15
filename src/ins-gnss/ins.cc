@@ -672,6 +672,10 @@ extern int updateins(const insopt_t *insopt,insstate_t *ins,const imud_t *data)
 #else
     double dt,dqb[4],qk_1[4],Ck_1[9],qk[4],dqe[4],qtmp[4],da[3]={0},dv[3]={0};
     double domgb[3],domge[3],dvfk[3],dvbk[4],domg,dCe[9];
+    domge[0]=0.0;
+    domge[1]=0.0;
+    domge[2]=0.0;
+
     double wv[3],Omge[3],ge[3],vek_1[3];
     int i;
 

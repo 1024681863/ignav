@@ -47,7 +47,6 @@
 
 #define NS(i,j,max)     ((((j)-1)%(max)-(i))<0?(((j)-1)%(max)-(i)+(max)):(((j)-1)%(max)-(i)))
 #define NE(i,j,max)     MAX(0,(((i)-(j))<0?((i)-(j)+(max)):((i)-(j))))
-
 /* constants/global variables ------------------------------------------------*/
 struct obs {int n; obsd_t data[MAXOBS];};
 struct imu {int n; imud_t data[MAXIMU];};
@@ -494,7 +493,7 @@ static int inputobs(rtksvr_t *svr,obsd_t *obs)
     }
     /* check position mode if need base observation */
     switch (svr->rtk.opt.mode) {
-        case PMODE_SINGLE    : return nr;
+        case PMODE_SINGLE    :svr->syn.rover++; return nr;
         case PMODE_PPP_KINEMA: return nr;
         case PMODE_PPP_STATIC: return nr;
         case PMODE_PPP_FIXED : return nr;
@@ -776,7 +775,30 @@ static int decoderaw(rtksvr_t *svr, int index)
         if (ret==4) {
             for (j=0;j<imu->n;j++) {
                 adjustimu(&svr->rtk.opt,&imu->data[j]);
-                updateimu(svr,&imu->data[j],fobs++%MAXIMUBUF);
+                //imu是否需要内插
+                if ((imu->data[j].time.sec<(1/svr->rtk.opt.insopt.hz))&&fobs>1) {
+                        imud_t midimu;
+                        gtime_t timestamp={0};
+                        timestamp.time=imu->data[j].time.time;
+                        double lamda=timediff(timestamp,svr->imu[fobs%MAXIMUBUF].time)/timediff(imu->data[j].time,imu->data[j-1].time);
+                        midimu.time=timestamp;
+                        for (int kk=0;kk<3;kk++) {
+                            midimu.accl[kk]=imu->data[j].accl[kk]*lamda;
+                            midimu.gyro[kk]=imu->data[j].gyro[kk]*lamda;
+                        }
+                        for (int kk=0;kk<3;kk++) {
+                            imu->data[j].accl[kk]=imu->data[j].accl[kk]-midimu.accl[kk];
+                            imu->data[j].gyro[kk]=imu->data[j].gyro[kk]-midimu.gyro[kk];
+                        }
+                        updateimu(svr,&midimu,fobs++%MAXIMUBUF);
+                        updateimu(svr,&imu->data[j],fobs++%MAXIMUBUF);
+
+                }
+                else {
+                    updateimu(svr,&imu->data[j],fobs++%MAXIMUBUF);
+                }
+
+
                 if (k<MAXIMUBUF) k++; else svr->iprcout++;
                 if (fobs>=MAXIMUBUF) svr->syn.of[2]=fobs/MAXIMUBUF;
             }
@@ -1408,6 +1430,9 @@ static void *rtksvrthread(void *arg)
             }
             else {
                 /* decode receiver raw/rtcm data */
+                if (svr->format[i]==STRFMT_ZHUFENG) {
+                    svr->raw[i].time=svr->raw[0].time;
+                }
                 fobs[i]=decoderaw(svr,i);
             }
         }
@@ -1431,7 +1456,7 @@ static void *rtksvrthread(void *arg)
             imus.n=inputimu(svr,imus.data);
         }
         /* for rover and base observation data from buffer */
-        if (opt->mode<=PMODE_FIXED) for (i=0;i<fobs[0]&&i<MAXOBS;i++) {
+        if (opt->mode<=PMODE_PPP_FIXED) for (i=0;i<fobs[0]&&i<MAXOBS;i++) {
 
             /* input rover and base observation data */
             if (!(obss[i].n=inputobs(svr,obss[i].data))) {

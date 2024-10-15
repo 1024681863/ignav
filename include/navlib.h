@@ -539,6 +539,7 @@ extern "C"{
 #define STRFMT_OEM6_SOL  34             /* stream format: NovAtel OEM6 solution data */
 #define STRFMT_OEM6_POSE 35             /* stream format: NovAtel OEM6 dual ant. pose measurement */
 #define STRFMT_OEM6_RAW  36             /* stream format: NovAtel OEM6 raw observation data */
+#define STRFMT_ZHUFENG   37             /* 朱峰老师惯导数据集imu数据 */
 
 #define GROUND_TRUTH_KARL  1            /* Karlsruhe dataset ground truth solution format */
 #define GROUND_TRUTH_EUROC 2            /* EuRoC MAV dataset ground truth solution format */
@@ -2055,6 +2056,89 @@ typedef struct {         /* vehicle attitude solution data */
     gtime_t time;        /* attitude solution data time */
     double val[3],std[3];/* attitude solution data and its variance (roll,pitch,yaw/rad) */
 } att_t;
+typedef struct
+{
+	short int year;
+	short int month;
+	short int day;
+	short int hour;
+	short int minute;
+	short int second;
+} time_type;
+
+typedef struct
+{
+	double dVersionNumber;		       ///< Program version number (i.e. 8.20)
+	double dDataRateHz;			       ///< i.e. 100.0 records/second. If you do not know it, set this to zero
+									   ///< and then fill it in from the interface dialog boxes
+	double dGyrosScaleFactor;	       ///< Scale (multiply) the gyro measurements by this to get degrees/sec,
+									   ///< if bDeltaTheta=0. Scale the gyros by this to get degrees, if
+									   ///< bDeltaTheta =1. If you do not know it, then the data can not be
+									   ///< processed. Our default is to store the gyro data in 0.01 arcsec
+									   ///< increments or 0.01 arcsec/sec, so that GYRO_SCALE = 360000(Needed)
+	double dAccelScaleFactor;	       ///< Scale (multiply) the accel measurements by this to get m/s2
+									   ///< if bDeltaVelocity=0. Scale the accels by this to get m/s, if
+									   ///< bDeltaVelocity =1. If you do not know it, the data can not be
+									   ///< processed. Our default is to store the accel data in 1e-6 m/s
+									   ///< increments or 1e-6 m/s2, so that ACCEL_SCALE = 1000000(Needed)
+	double dTimeTagBias;	           ///< default is 0.0, but if you have a known millisecond-level bias in
+									   ///< in your GPS..INS time tags, then enter it here
+	int bDeltaTheta;		           ///< Default is 1, which indicates the data to follow will be delta
+									   ///< thetas, meaning angular increments (i.e. scale and divide by
+									   ///< by dDataRateHz to get degrees/second). If the flag is set to 0, then
+									   ///< the data will be read directly as scaled angular rates
+									   ///< Comment:0-angular rate,1-angular increment(Needed)
+	int bDeltaVelocity;			       ///< Default is 1, which indicates the data to follow will be delta v's,
+									   ///< meaning velocity increments (i.e. scale and divide by
+									   ///< dDataRateHz to get m/s2). If the flag is set to 0, then the data will
+									   ///< be read directly as scaled accelerations
+									   ///< Comment:0-angular rate,1-angular increment(Needed)
+	int iUtcOrGpsTime;			       ///< Defines the time-tags as being in UTC or GPS seconds of the week
+									   ///< 0 every Unknown (default is GPS), 1 every UTC, 2 every GPS
+	int iRcvTimeOrCorrTime;		       ///< Defines whether the GPS time-tags are on the nominal top of the
+									   ///< second or are corrected for receiver time bias
+									   ///< 0 - do not know (default is corrected time)
+									   ///< 1 - receive time on the nominal top of the epoch
+									   ///< 2 - corrected time i.e. corr_time = rcv_time - rcvr_clock_bias
+	int  lXoffset;				       ///< X value of lever arm, in millimeters
+	int  lYoffset;				       ///< Y value of lever arm, in millimeters
+	int  lZoffset;				       ///< Z value of lever arm, in millimeters
+	time_type tCreate;		           ///< Creation time; skip if writing directly to this format (12 bytes)
+	char szImuName[32];			       ///< Name or type of inertial unit that is being used
+	bool bDirValid;					   ///< Set to true if the sensor definition that follows is valid
+									   ///< Skip if writing directly to this format
+	unsigned char ucX;		           ///< Direction of X-axis; skip if writing directly to this format
+	unsigned char ucY;		           ///< Direction of Y-axis; skip if writing directly to this format
+	unsigned char ucZ;			       ///< Direction of Z-axis; skip if writing directly to this format
+	char szProgramName[32];  	       ///< Name of calling program; skip if writing directly to this format
+	bool bLeverArmValid;	           ///< Set to true if the sensor definition that follows is valid
+									   ///< Lever arm is from IMU to GPS phase centre
+	char szHeader[8];			       ///< $IMURAW[\0] - NULL terminated ASCII string
+	char bIsIntelOrMotorola;	       ///< 0 every Intel (Little Endian) - default
+									   ///< 1 every Motorola (Big Endian) - swap bytes for IExplorer
+									   ///< This can be set for any user who directly writes in our
+									   ///< format with a Big Endian processor. IExplorer will swap the bytes
+	char Reserved[354];		           ///< Reserved for future use; bytes should be zeroed
+	double dt;                         ///< Real sampling rate, which can be get from the IMU data body
+    bool flag;
+} INS_HEAD;
+
+
+typedef struct
+{
+	double Time;				       ///< GPS time frame every seconds of the week
+	int gx, gy, gz;				       ///< delta theta or angular rate depending on flag in the header
+	int ax, ay, az;				       ///< delta v or acceleration depending on flag in the header
+
+} IE84_INS_type;	                   ///< this is the binary structure type expected in GPSIMU
+
+typedef struct tagINS_DATA
+{   double gtPre;
+	double gt;				           ///< GPS time frame every seconds of the week
+	long double gx, gy, gz;		       ///< delta theta or angular rate depending on flag in the header(rad)
+	long double ax, ay, az;	           ///< delta v or acceleration depending on flag in the header(m/s^2)
+
+} INS_DATA;
 
 typedef struct {        /* receiver raw data control type */
     gtime_t time;       /* message time */
@@ -2105,6 +2189,8 @@ typedef struct {        /* receiver raw data control type */
     void *optp;         /* process options */
     void *strp;         /* stream pointer */
     int imufmt;         /* imu data type */
+    INS_HEAD m_FFSHead;
+    INS_DATA insData;
 } raw_t;
 
 /* type definitions ----------------------------------------------------------*/
@@ -2270,6 +2356,18 @@ typedef struct {        /* gis type */
     gisd_t *data[MAXGISLAYER];   /* gis data list */
     double bound[4];    /* boundary {lat0,lat1,lon0,lon1} */
 } gis_t;
+
+
+
+
+
+
+
+
+
+
+
+
 
 typedef void fatalfunc_t(const char *); /* fatal callback function type */
 typedef int8_t s8;                      /* Signed 8-bit integer */
@@ -2632,6 +2730,8 @@ EXPORT int input_img_karl (raw_t *raw, unsigned char data);
 EXPORT int input_malaga_gnss(raw_t *raw, unsigned char data);
 EXPORT int input_malaga_imu (raw_t *raw, unsigned char data);
 EXPORT int input_malaga_img (raw_t *raw, unsigned char data);
+EXPORT int input_zhufeng_raw(raw_t *raw, unsigned char data);
+
 
 EXPORT int input_oem6f_sol (raw_t *raw, FILE *fp);
 EXPORT int input_oem6f_pose(raw_t *raw, FILE *fp);
@@ -2660,6 +2760,10 @@ EXPORT int gen_ubx (const char *msg, unsigned char *buff);
 EXPORT int gen_stq (const char *msg, unsigned char *buff);
 EXPORT int gen_nvs (const char *msg, unsigned char *buff);
 EXPORT int gen_lexr(const char *msg, unsigned char *buff);
+
+
+
+
 
 /* rtcm functions ------------------------------------------------------------*/
 EXPORT int init_rtcm   (rtcm_t *rtcm);

@@ -862,7 +862,7 @@ extern int init_raw(raw_t *raw, int format)
     int i,j,sys,ret=1;
     
     trace(3,"init_raw: format=%d\n",format);
-    
+
     raw->time=time0;
     raw->ephsat=0;
     raw->sbsmsg=sbsmsg0;
@@ -1029,6 +1029,9 @@ extern int input_raw(raw_t *raw, int format, unsigned char data)
         case STRFMT_OEM6_SOL: return input_oem6_sol   (raw,data);
         case STRFMT_OEM6_POSE:return input_oem6_pose  (raw,data);
         case STRFMT_OEM6_RAW: return input_oem6_raw   (raw,data);
+        case STRFMT_ZHUFENG: return input_zhufeng_raw (raw,data);
+
+
     }
     return 0;
 }
