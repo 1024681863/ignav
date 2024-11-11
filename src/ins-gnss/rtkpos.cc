@@ -928,9 +928,9 @@ static void udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat, con
                    const int *iu, const int *ir, int ns, const nav_t *nav)
 {
     double cp,pr,cp1,cp2,pr1,pr2,*bias,lami,lam1,lam2,C1,C2;
-    double *x,*P,eps=rtk->opt.eps;
-    register int i,j,f,slip,reset,nf=NF(&rtk->opt),nx,tc=0,ib;
-    
+    double *x,*P,offset,eps=rtk->opt.eps;
+    register int i,j,f,slip,reset,nf=NF(&rtk->opt),nx,tc=0,ib,jj;
+
     trace(3,"udbias  : tt=%.3f ns=%d\n",tt,ns);
 
     tc=rtk->opt.mode==PMODE_INS_TGNSS?1:0;
@@ -1002,7 +1002,7 @@ static void udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat, con
         bias=zeros(ns,1);
         
         /* estimate approximate phase-bias by phase - code */
-        for (i=0;i<ns;i++) {
+        for (i=jj=0,offset=0.0;i<ns;i++) {
             
             if (rtk->opt.ionoopt!=IONOOPT_IFLC) {
                 cp=sdobs(obs,iu[i],ir[i],f); /* cycle */
@@ -1030,6 +1030,16 @@ static void udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat, con
                 C1= SQR(lam2)/(SQR(lam2)-SQR(lam1));
                 C2=-SQR(lam1)/(SQR(lam2)-SQR(lam1));
                 bias[i]=(C1*lam1*cp1+C2*lam2*cp2)-(C1*pr1+C2*pr2);
+            }
+            if (rtk->x[IB(sat[i],f,&rtk->opt)]!=0.0) {
+                offset+=bias[i]-rtk->x[IB(sat[i],f,&rtk->opt)];
+                j++;
+            }
+        }
+        /* correct phase-bias offset to enssure phase-code coherency */
+        if (j>0) {
+            for (i=1;i<=MAXSAT;i++) {
+                if (rtk->x[IB(i,f,&rtk->opt)]!=0.0) rtk->x[IB(i,f,&rtk->opt)]+=offset/j;
             }
         }
         /* set initial states of phase-bias */
@@ -3070,7 +3080,6 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     trace(3,"rtkpos  : time=%s n=%d\n",time_str(obs[0].time,3),n);
     trace(4,"obs=\n"); traceobs(4,obs,n);
     trace(5,"nav=\n"); tracenav(5,nav);
-
     /* check tc-mode */
     tcs=opt->mode==PMODE_INS_TGNSS&&insopt->tc==INSTC_SINGLE;
     tcp=opt->mode==PMODE_INS_TGNSS&&insopt->tc==INSTC_PPK;
@@ -3122,7 +3131,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         }
     }
     if (time.time!=0) rtk->tt=timediff(rtk->sol.time,time);
-    if (fabs(rtk->tt)<DTTOL&&opt->mode<=PMODE_FIXED) return stat;
+// if (fabs(rtk->tt)<DTTOL&&opt->mode<= PMODE_FIXED) return stat;
 
     /* single point positioning */
     if (opt->mode==PMODE_SINGLE||tcs) {
