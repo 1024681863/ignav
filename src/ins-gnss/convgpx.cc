@@ -1,6 +1,8 @@
 /*------------------------------------------------------------------------------
 * convgpx.c : gpx converter
 *
+*          Copyright (C) 2016 by T.TAKASU, All rights reserved.
+*
 * references :
 *     [1] GPX The GPS Exchange Format http://www.topografix.com/gpx.asp
 *
@@ -8,9 +10,10 @@
 * history : 2016/06/11  1.0  new
 *           2016/09/18  1.1  modify <fix> labels according GPX specs
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
 
 /* constants -----------------------------------------------------------------*/
+
 #define HEADXML "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 #define HEADGPX "<gpx version=\"1.1\" creator=\"%s\" xmlns=\"%s\">\n"
 #define TAILGPX "</gpx>"
@@ -27,7 +30,7 @@ static void outpoint(FILE *fp, gtime_t time, const double *pos,
     
     fprintf(fp,"<wpt lat=\"%.9f\" lon=\"%.9f\">\n",pos[0]*R2D,pos[1]*R2D);
     if (outalt) {
-        fprintf(fp," <ele>%.4f</ele>\n",pos[2]-(outalt==2?0.0:0.0));
+        fprintf(fp," <ele>%.4f</ele>\n",pos[2]-(outalt==2?geoidh(pos):0.0));
     }
     if (outtime) {
         if      (outtime==2) time=gpst2utc(time);
@@ -37,7 +40,7 @@ static void outpoint(FILE *fp, gtime_t time, const double *pos,
                 ep[0],ep[1],ep[2],ep[3],ep[4],ep[5]);
     }
     if (outalt==2) {
-        fprintf(fp," <geoidheight>%.4f</geoidheight>\n",0.0);
+        fprintf(fp," <geoidheight>%.4f</geoidheight>\n",geoidh(pos));
     }
     if (stat>=1&&stat<=6) {
         fprintf(fp," <fix>%s</fix>\n",fix_label[stat-1]);
@@ -61,7 +64,7 @@ static void outtrack(FILE *fp, const solbuf_t *solbuf, int outalt, int outtime)
         fprintf(fp,"  <trkpt lat=\"%.9f\" lon=\"%.9f\">\n",pos[0]*R2D,
                 pos[1]*R2D);
         if (outalt) {
-            fprintf(fp,"   <ele>%.4f</ele>\n",pos[2]-(outalt==2?0.0:0.0));
+            fprintf(fp,"   <ele>%.4f</ele>\n",pos[2]-(outalt==2?geoidh(pos):0.0));
         }
         if (outtime) {
             time=solbuf->data[i].time;
@@ -72,7 +75,7 @@ static void outtrack(FILE *fp, const solbuf_t *solbuf, int outalt, int outtime)
                     ep[0],ep[1],ep[2],ep[3],ep[4],ep[5]);
         }
         if (outalt==2) {
-            fprintf(fp,"   <geoidheight>%.4f</geoidheight>\n",0.0);
+            fprintf(fp,"   <geoidheight>%.4f</geoidheight>\n",geoidh(pos));
         }
         fprintf(fp,"  </trkpt>\n");
     }
@@ -136,13 +139,12 @@ extern int convgpx(const char *infile, const char *outfile, gtime_t ts,
     solbuf_t solbuf={0};
     double rr[3]={0},pos[3],dr[3];
     int i,j;
-    char *p,file[1024],infile_[1024];
+    char *p,file[1024];
     
     trace(3,"convgpx : infile=%s outfile=%s\n",infile,outfile);
-
-    strcpy(infile_,infile);
+    
     if (!*outfile) {
-        if ((p=strrchr(infile_,'.'))) {
+        if ((p=strrchr(infile,'.'))) {
             strncpy(file,infile,p-infile);
             strcpy(file+(p-infile),".gpx");
         }

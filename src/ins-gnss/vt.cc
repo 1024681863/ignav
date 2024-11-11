@@ -30,13 +30,9 @@
 #include <errno.h>
 #include <termios.h>
 #endif
+#include "vt.h"
 
-#include <navlib.h>
-
-#define DEF_DEV     "/dev/tty"         /* default console device */
-#define DEF_OUT     "/dev/stdout"
-#define DEF_IN      "/dev/stdin"
-#define DEBUG       0
+#define DEF_DEV     "/dev/tty"          /* default console device */
 
 #define C_DEL       (char)0x7F          /* delete */
 #define C_ESC       (char)0x1B          /* escape */
@@ -79,16 +75,10 @@ extern vt_t *vt_open(int sock, const char *dev)
         vt->hist[i]=NULL;
     }
     if (!sock) {
-
-#if DEBUG
-        vt->in=open(DEF_IN,O_RDWR);
-        vt->out=open(DEF_OUT,O_RDWR);
-#else
         if ((vt->in=vt->out=open(*dev?dev:DEF_DEV,O_RDWR))<0) {
             free(vt);
             return 0;
         }
-#endif
         /* set terminal mode echo-off */
         tcgetattr(vt->in,&vt->tio);
         tcsetattr(vt->in,TCSANOW,&tio);
@@ -317,6 +307,7 @@ extern int vt_getc(vt_t *vt, char *c)
 extern int vt_gets(vt_t *vt, char *buff, int n)
 {
     char c;
+    
     buff[0]='\0';
     
     if (!vt||!vt->state) return 0;
@@ -325,7 +316,7 @@ extern int vt_gets(vt_t *vt, char *buff, int n)
     
     while (vt->state) {
         if (!vt_getc(vt,&c)) return 0;
-
+        
         if (c==C_CTRD&&vt->n==0) { /* logout */
             vt->state=0;
         }

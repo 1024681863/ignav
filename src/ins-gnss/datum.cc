@@ -1,10 +1,12 @@
 /*------------------------------------------------------------------------------
 * datum.c : datum transformation
 *
+*          Copyright (C) 2007 by T.TAKASU, All rights reserved.
+*
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
 * history : 2007/02/08 1.0 new
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
 
 #define MAXPRM  400000              /* max number of parameter records */
 

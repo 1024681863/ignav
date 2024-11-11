@@ -1,6 +1,8 @@
 /*------------------------------------------------------------------------------
 * tides.c : tidal displacement corrections
 *
+*          Copyright (C) 2015-2017 by T.TAKASU, All rights reserved.
+*
 * options : -DIERS_MODEL use IERS tide model
 *
 * references :
@@ -19,7 +21,9 @@
 *           2015/06/11 1.1  fix bug on computing days in tide_oload() (#128)
 *           2017/04/11 1.2  fix bug on calling geterp() in timdedisp()
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
+
+#define SQR(x)      ((x)*(x))
 
 #define AS2R        (D2R/3600.0)    /* arc sec to radian */
 #define GME         3.986004415E+14 /* earth gravitational constant */

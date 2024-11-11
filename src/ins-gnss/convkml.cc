@@ -1,6 +1,8 @@
 /*------------------------------------------------------------------------------
 * convkml.c : google earth kml converter
 *
+*          Copyright (C) 2007-2017 by T.TAKASU, All rights reserved.
+*
 * references :
 *     [1] Open Geospatial Consortium Inc., OGC 07-147r2, OGC(R) KML, 2008-04-14
 *
@@ -17,9 +19,10 @@
 *           2010/08/14  1.5  fix bug on readsolt() (2.4.0_p3)
 *           2017/06/10  1.6  support wild-card in input file
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
 
 /* constants -----------------------------------------------------------------*/
+
 #define SIZP     0.2            /* mark size of rover positions */
 #define SIZR     0.3            /* mark size of reference position */
 #define TINT     60.0           /* time label interval (sec) */
@@ -48,7 +51,7 @@ static void outtrack(FILE *f, const solbuf_t *solbuf, const char *color,
     for (i=0;i<solbuf->n;i++) {
         ecef2pos(solbuf->data[i].rr,pos);
         if      (outalt==0) pos[2]=0.0;
-        else if (outalt==2) pos[2]-=0.0;
+        else if (outalt==2) pos[2]-=geoidh(pos);
         fprintf(f,"%13.9f,%12.9f,%5.3f\n",pos[1]*R2D,pos[0]*R2D,pos[2]);
     }
     fprintf(f,"</coordinates>\n");
@@ -81,7 +84,7 @@ static void outpoint(FILE *fp, gtime_t time, const double *pos,
     if (outalt) {
         fprintf(fp,"<extrude>1</extrude>\n");
         fprintf(fp,"<altitudeMode>absolute</altitudeMode>\n");
-        alt=pos[2]-(outalt==2?0.0:0.0);
+        alt=pos[2]-(outalt==2?geoidh(pos):0.0);
     }
     fprintf(fp,"<coordinates>%13.9f,%12.9f,%5.3f</coordinates>\n",pos[1]*R2D,
             pos[0]*R2D,alt);
@@ -89,8 +92,8 @@ static void outpoint(FILE *fp, gtime_t time, const double *pos,
     fprintf(fp,"</Placemark>\n");
 }
 /* save kml file -------------------------------------------------------------*/
-extern int savekml(const char *file, const solbuf_t *solbuf, int tcolor,int pcolor,
-                   int outalt, int outtime)
+static int savekml(const char *file, const solbuf_t *solbuf, int tcolor,
+                   int pcolor, int outalt, int outtime)
 {
     FILE *fp;
     double pos[3];
@@ -159,12 +162,10 @@ extern int convkml(const char *infile, const char *outfile, gtime_t ts,
     solbuf_t solbuf={0};
     double rr[3]={0},pos[3],dr[3];
     int i,j,nfile,stat;
-    char *p,file[1024],*files[MAXEXFILE]={0},infile_[1024];
+    char *p,file[1024],*files[MAXEXFILE]={0};
     
     trace(3,"convkml : infile=%s outfile=%s\n",infile,outfile);
-
-    strcpy(infile_,infile);
-
+    
     /* expand wild-card of infile */
     for (i=0;i<MAXEXFILE;i++) {
         if (!(files[i]=(char *)malloc(1024))) {
@@ -172,16 +173,16 @@ extern int convkml(const char *infile, const char *outfile, gtime_t ts,
             return -4;
         }
     }
-    if ((nfile=expath(infile_,files,MAXEXFILE))<=0) {
+    if ((nfile=expath(infile,files,MAXEXFILE))<=0) {
         for (i=0;i<MAXEXFILE;i++) free(files[i]);
         return -3;
     }
     if (!*outfile) {
-        if ((p=strrchr(infile_,'.'))) {
-            strncpy(file,infile_,p-infile_);
-            strcpy(file+(p-infile_),".kml");
+        if ((p=strrchr(infile,'.'))) {
+            strncpy(file,infile,p-infile);
+            strcpy(file+(p-infile),".kml");
         }
-        else sprintf(file,"%s.kml",infile_);
+        else sprintf(file,"%s.kml",infile);
     }
     else strcpy(file,outfile);
     

@@ -1,6 +1,8 @@
 /*------------------------------------------------------------------------------
 * lambda.c : integer ambiguity resolution
 *
+*          Copyright (C) 2007-2008 by T.TAKASU, All rights reserved.
+*
 * reference :
 *     [1] P.J.G.Teunissen, The least-square ambiguity decorrelation adjustment:
 *         a method for fast GPS ambiguity estimation, J.Geodesy, Vol.70, 65-82,
@@ -12,12 +14,14 @@
 * history : 2007/01/13 1.0 new
 *           2015/05/31 1.1 add api lambda_reduction(), lambda_search()
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
 
 /* constants/macros ----------------------------------------------------------*/
+
 #define LOOPMAX     10000           /* maximum count of search loop */
 
 #define SGN(x)      ((x)<=0.0?-1.0:1.0)
+#define ROUND(x)    (floor((x)+0.5))
 #define SWAP(x,y)   do {double tmp_; tmp_=x; x=y; y=tmp_;} while (0)
 
 /* LD factorization (Q=L'*diag(D)*L) -----------------------------------------*/
@@ -28,27 +32,14 @@ static int LD(int n, const double *Q, double *L, double *D)
     
     memcpy(A,Q,sizeof(double)*n*n);
     for (i=n-1;i>=0;i--) {
-        if ((D[i]=A[i+i*n])<=0.0) {
-#if 0
-            info=-1; break;
-#else
-            D[i]=fabs(A[i+i*n]);
-#endif
-        }
+        if ((D[i]=A[i+i*n])<=0.0) {info=-1; break;}
         a=sqrt(D[i]);
         for (j=0;j<=i;j++) L[i+j*n]=A[i+j*n]/a;
         for (j=0;j<=i-1;j++) for (k=0;k<=j;k++) A[j+k*n]-=L[i+k*n]*L[i+j*n];
         for (j=0;j<=i;j++) L[i+j*n]/=L[i+i*n];
     }
     free(A);
-    if (info<0) {
-        trace(2,"\"%s : LD factorization error, trying UD from Gibbs"
-                "(col major UD=LD)\n",__FILE__);
-        double Qc[n*n];
-        memcpy(Qc,Q,n*n*sizeof(double));
-        matrix_udu(n,Qc,L,D);
-        info=0; 
-    }
+    if (info) fprintf(stderr,"%s : LD factorization error\n",__FILE__);
     return info;
 }
 /* integer gauss transformation ----------------------------------------------*/
@@ -108,7 +99,7 @@ static int search(int n, int m, const double *L, const double *D,
     zb[k]=zs[k];
     z[k]=ROUND(zb[k]); y=zb[k]-z[k]; step[k]=SGN(y);
     for (c=0;c<LOOPMAX;c++) {
-        newdist=dist[k]+y*y/(fabs(D[k])==0.0?SGN(D[k])*1E-20:D[k]);
+        newdist=dist[k]+y*y/D[k];
         if (newdist<maxdist) {
             if (k!=0) {
                 dist[--k]=newdist;
@@ -152,7 +143,7 @@ static int search(int n, int m, const double *L, const double *D,
     free(S); free(dist); free(zb); free(z); free(step);
     
     if (c>=LOOPMAX) {
-        trace(2,"%s : search loop count overflow\n",__FILE__);
+        fprintf(stderr,"%s : search loop count overflow\n",__FILE__);
         return -1;
     }
     return 0;

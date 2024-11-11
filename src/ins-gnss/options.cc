@@ -1,5 +1,7 @@
 /*------------------------------------------------------------------------------
-* options.cc : options functions
+* options.c : options functions
+*
+*          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
 * history : 2010/07/20  1.1  moved from postpos.c
@@ -22,9 +24,11 @@
 *           2016/06/10  1.9  add ant2-maxaveep,ant2-initrst
 *           2016/07/31  1.10 add out-outsingle,out-maxsolstd
 *           2017/06/14  1.11 add out-outvel
+*           2020/11/30  1.12 change options pos1-frequency, pos1-ionoopt,
+*                             pos1-tropopt, pos1-sateph, pos1-navsys,
+*                             pos2-gloarmode,
 *-----------------------------------------------------------------------------*/
-#include <navlib.h>
-#include "navlib.h"
+#include "rtklib.h"
 
 /* system options buffer -----------------------------------------------------*/
 static prcopt_t prcopt_;
@@ -38,15 +42,15 @@ static char snrmask_[NFREQ][1024];
 
 /* system options table ------------------------------------------------------*/
 #define SWTOPT  "0:off,1:on"
-#define MODOPT  "0:single,1:dgps,2:kinematic,3:static,4:movingbase,5:fixed,6:ppp-kine,7:ppp-static,8:ppp-fixed,9:ins-update,10:ins-loosely-coupled,11:ins-tightly-coupled,12:ins-vo-loosely-coupled,13:vo"
-#define FRQOPT  "1:l1,2:l1+l2,3:l1+l2+l5,4:l1+l5"
-#define TYPOPT  "0:forward,1:backward,2:combined,3:RTS"
-#define IONOPT  "0:off,1:brdc,2:sbas,3:dual-freq,4:est-stec,5:ionex-tec,6:qzs-brdc,7:qzs-lex,8:stec"
-#define TRPOPT  "0:off,1:saas,2:sbas,3:est-ztd,4:est-ztdgrad,5:ztd"
+#define MODOPT  "0:single,1:dgps,2:kinematic,3:static,4:movingbase,5:fixed,6:ppp-kine,7:ppp-static,8:ppp-fixed"
+#define FRQOPT  "1:l1,2:l1+2,3:l1+2+3,4:l1+2+3+4,5:l1+2+3+4+5"
+#define TYPOPT  "0:forward,1:backward,2:combined"
+#define IONOPT  "0:off,1:brdc,2:sbas,3:dual-freq,4:est-stec,5:ionex-tec,6:qzs-brdc"
+#define TRPOPT  "0:off,1:saas,2:sbas,3:est-ztd,4:est-ztdgrad"
 #define EPHOPT  "0:brdc,1:precise,2:brdc+sbas,3:brdc+ssrapc,4:brdc+ssrcom"
-#define NAVOPT  "1:gps+2:sbas+4:glo+8:gal+16:qzs+32:comp"
-#define GAROPT  "0:off,1:on,2:autocal"
-#define SOLOPT  "0:llh,1:xyz,2:enu,3:nmea,4:stat,5:gsif,6:ins,7:vo"
+#define NAVOPT  "1:gps+2:sbas+4:glo+8:gal+16:qzs+32:bds+64:navic"
+#define GAROPT  "0:off,1:on"
+#define SOLOPT  "0:llh,1:xyz,2:enu,3:nmea"
 #define TSYOPT  "0:gpst,1:utc,2:jst"
 #define TFTOPT  "0:tow,1:hms"
 #define DFTOPT  "0:deg,1:dms"
@@ -54,12 +58,10 @@ static char snrmask_[NFREQ][1024];
 #define GEOOPT  "0:internal,1:egm96,2:egm08_2.5,3:egm08_1,4:gsi2000"
 #define STAOPT  "0:all,1:single"
 #define STSOPT  "0:off,1:state,2:residual"
-#define ARMOPT  "0:off,1:continuous,2:instantaneous,3:fix-and-hold,4:pppar,5:pppar-ils,6:wlnl,7:tcar,8:wlnlc,9:tcarc"
+#define ARMOPT  "0:off,1:continuous,2:instantaneous,3:fix-and-hold"
 #define POSOPT  "0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm,6:raw"
 #define TIDEOPT "0:off,1:on,2:otl"
 #define PHWOPT  "0:off,1:on,2:precise"
-#define CAMOPT  "0:pinhole"
-#define DISOPT  "0:radial-tangential"
 
 EXPORT opt_t sysopts[]={
     {"pos1-posmode",    3,  (void *)&prcopt_.mode,       MODOPT },
@@ -84,9 +86,6 @@ EXPORT opt_t sysopts[]={
     {"pos1-posopt6",    3,  (void *)&prcopt_.posopt[5],  SWTOPT },
     {"pos1-exclsats",   2,  (void *)exsats_,             "prn ..."},
     {"pos1-navsys",     0,  (void *)&prcopt_.navsys,     NAVOPT },
-    {"pos1-adjobs",     0,  (void *)&prcopt_.adjobs,     ""     },
-    {"pos1-eps",        1,  (void *)&prcopt_.eps,        ""     },
-    {"pos1-gtfmt",      0,  (void *)&prcopt_.gtfmt,      ""     },
     
     {"pos2-armode",     3,  (void *)&prcopt_.modear,     ARMOPT },
     {"pos2-gloarmode",  3,  (void *)&prcopt_.glomodear,  GAROPT },
@@ -99,7 +98,6 @@ EXPORT opt_t sysopts[]={
     {"pos2-arlockcnt",  0,  (void *)&prcopt_.minlock,    ""     },
     {"pos2-arelmask",   1,  (void *)&elmaskar_,          "deg"  },
     {"pos2-arminfix",   0,  (void *)&prcopt_.minfix,     ""     },
-    {"pos2-arminfixwl", 0,  (void *)&prcopt_.minfixwl,   ""     },
     {"pos2-armaxiter",  0,  (void *)&prcopt_.armaxiter,  ""     },
     {"pos2-elmaskhold", 1,  (void *)&elmaskhold_,        "deg"  },
     {"pos2-aroutcnt",   0,  (void *)&prcopt_.maxout,     ""     },
@@ -129,14 +127,6 @@ EXPORT opt_t sysopts[]={
     {"out-nmeaintv1",   1,  (void *)&solopt_.nmeaintv[0],"s"    },
     {"out-nmeaintv2",   1,  (void *)&solopt_.nmeaintv[1],"s"    },
     {"out-outstat",     3,  (void *)&solopt_.sstat,      STSOPT },
-    {"out-att",         0,  (void *)&solopt_.outatt,     ""     },
-    {"out-acc",         0,  (void *)&solopt_.outacc,     ""     },
-    {"out-vel",         0,  (void *)&solopt_.outvel,     ""     },
-    {"out-vb",          0,  (void *)&solopt_.outvb,      ""     },
-    {"out-ba",          0,  (void *)&solopt_.outba,      ""     },
-    {"out-bg",          0,  (void *)&solopt_.outbg,      ""     },
-    {"out-inspof",      0,  (void *)&solopt_.ins_posf,   ""     },
-    {"out-imuraw",      0,  (void *)&solopt_.outimuraw,  ""     },
     
     {"stats-eratio1",   1,  (void *)&prcopt_.eratio[0],  ""     },
     {"stats-eratio2",   1,  (void *)&prcopt_.eratio[1],  ""     },
@@ -180,172 +170,21 @@ EXPORT opt_t sysopts[]={
     {"misc-rnxopt1",    2,  (void *)prcopt_.rnxopt[0],   ""     },
     {"misc-rnxopt2",    2,  (void *)prcopt_.rnxopt[1],   ""     },
     {"misc-pppopt",     2,  (void *)prcopt_.pppopt,      ""     },
-
-    {"file-satantfile", 2,  (void *)filopt_.satantp,     ""     },
-    {"file-rcvantfile", 2,  (void *)filopt_.rcvantp,     ""     },
-    {"file-staposfile", 2,  (void *)filopt_.stapos,      ""     },
-    {"file-geoidfile",  2,  (void *)filopt_.geoid,       ""     },
-    {"file-ionofile",   2,  (void *)filopt_.iono,        ""     },
-    {"file-dcbfile",    2,  (void *)filopt_.dcb,         ""     },
-    {"file-eopfile",    2,  (void *)filopt_.eop,         ""     },
-    {"file-blqfile",    2,  (void *)filopt_.blq,         ""     },
-    {"file-tempdir",    2,  (void *)filopt_.tempdir,     ""     },
-    {"file-geexefile",  2,  (void *)filopt_.geexe,       ""     },
-    {"file-solstatfile",2,  (void *)filopt_.solstat,     ""     },
-    {"file-tracefile",  2,  (void *)filopt_.trace,       ""     },
-    {"file-navfile",    2,  (void *)filopt_.navfile,     ""     },
-    {"file-bdsfile",    2,  (void *)filopt_.bdsfile,     ""     },
-    {"file-monodir",    2,  (void *)prcopt_.monodir,     ""     },
-    {"file-gtfile",     2,  (void *)filopt_.gtfile,      ""     },
-    {"file-magfile",    2,  (void *)filopt_.magfile,     ""     },
-
+    
+    {"file-satantfile", 2,  (void *)&filopt_.satantp,    ""     },
+    {"file-rcvantfile", 2,  (void *)&filopt_.rcvantp,    ""     },
+    {"file-staposfile", 2,  (void *)&filopt_.stapos,     ""     },
+    {"file-geoidfile",  2,  (void *)&filopt_.geoid,      ""     },
+    {"file-ionofile",   2,  (void *)&filopt_.iono,       ""     },
+    {"file-dcbfile",    2,  (void *)&filopt_.dcb,        ""     },
+    {"file-eopfile",    2,  (void *)&filopt_.eop,        ""     },
+    {"file-blqfile",    2,  (void *)&filopt_.blq,        ""     },
+    {"file-tempdir",    2,  (void *)&filopt_.tempdir,    ""     },
+    {"file-geexefile",  2,  (void *)&filopt_.geexe,      ""     },
+    {"file-solstatfile",2,  (void *)&filopt_.solstat,    ""     },
+    {"file-tracefile",  2,  (void *)&filopt_.trace,      ""     },
+    
     {"",0,NULL,""} /* terminator */
-};
-EXPORT opt_t insopts[]={
-    {"ins-leverarm1",   1, (void *)&prcopt_.insopt.lever[0], "" },
-    {"ins-leverarm2",   1, (void *)&prcopt_.insopt.lever[1], "" },
-    {"ins-leverarm3",   1, (void *)&prcopt_.insopt.lever[2], "" },
-    {"ins-gravityex",   0, (void *)&prcopt_.insopt.gravityex,"" },
-    {"ins-updint",      0, (void *)&prcopt_.insopt.updint,   "" },
-    {"ins-baopt",       0, (void *)&prcopt_.insopt.baopt,    "" },
-    {"ins-bgopt",       0, (void *)&prcopt_.insopt.bgopt,    "" },
-    {"ins-estsg",       0, (void *)&prcopt_.insopt.estsg,    "" },
-    {"ins-estsa",       0, (void *)&prcopt_.insopt.estsa,    "" },
-    {"ins-estdt",       0, (void *)&prcopt_.insopt.estdt,    "" },
-    {"ins-estrg",       0, (void *)&prcopt_.insopt.estrg,    "" },
-    {"ins-estra",       0, (void *)&prcopt_.insopt.estra,    "" },
-    {"ins-estlever",    0, (void *)&prcopt_.insopt.estlever, "" },
-    {"ins-estodos",     0, (void *)&prcopt_.insopt.estodos,  "" },
-    {"ins-estodoa",     0, (void *)&prcopt_.insopt.estodoa,  "" },
-    {"ins-estodol",     0, (void *)&prcopt_.insopt.estodol,  "" },
-    {"ins-estmisv",     0, (void *)&prcopt_.insopt.estmisv,  "" },
-    {"ins-baproopt",    0, (void *)&prcopt_.insopt.baproopt, "" },
-    {"ins-bgproopt",    0, (void *)&prcopt_.insopt.bgproopt, "" },
-    {"ins-sgproopt",    0, (void *)&prcopt_.insopt.sgproopt, "" },
-    {"ins-saproopt",    0, (void *)&prcopt_.insopt.saproopt, "" },
-    {"ins-dtproopt",    0, (void *)&prcopt_.insopt.dtproopt, "" },
-    {"ins-rgproopt",    0, (void *)&prcopt_.insopt.rgproopt, "" },
-    {"ins-raproopt",    0, (void *)&prcopt_.insopt.raproopt, "" },
-    {"ins-osproopt",    0, (void *)&prcopt_.insopt.osproopt, "" },
-    {"ins-olproopt",    0, (void *)&prcopt_.insopt.olproopt, "" },
-    {"ins-oaproopt",    0, (void *)&prcopt_.insopt.oaproopt, "" },
-    {"ins-cmaopt",      0, (void *)&prcopt_.insopt.cmaopt,   "" },
-    {"ins-vmaopt",      0, (void *)&prcopt_.insopt.vmaopt,   "" },
-
-    {"ins-imuformat",   0, (void *)&prcopt_.insopt.imuformat,"" },
-    {"ins-imudecfmt",   0, (void *)&prcopt_.insopt.imudecfmt,"" },
-    {"ins-imucoors",    0, (void *)&prcopt_.insopt.imucoors, "" },
-    {"ins-imuvalfmt",   0, (void *)&prcopt_.insopt.imuvalfmt,"" },
-    {"ins-exprn",       0, (void *)&prcopt_.insopt.exprn,    "" },
-    {"ins-exphi",       0, (void *)&prcopt_.insopt.exphi,    "" },
-    {"ins-exvm",        0, (void *)&prcopt_.insopt.exvm,     "" },
-    {"ins-iisu",        0, (void *)&prcopt_.insopt.iisu,     "" },
-    {"ins-nhc",         0, (void *)&prcopt_.insopt.nhc,      "" },
-    {"ins-zvu",         0, (void *)&prcopt_.insopt.zvu,      "" },
-    {"ins-zaru",        0, (void *)&prcopt_.insopt.zaru,     "" },
-    {"ins-detst",       0, (void *)&prcopt_.insopt.detst,    "" },
-    {"ins-tc",          0, (void *)&prcopt_.insopt.tc,       "" },
-    {"ins-lc",          0, (void *)&prcopt_.insopt.lc,       "" },
-    {"ins-doppler",     0, (void *)&prcopt_.insopt.dopp,     "" },
-    {"ins-intpref",     0, (void *)&prcopt_.insopt.intpref,  "" },
-    {"ins-minp",        0, (void *)&prcopt_.insopt.minp,     "" },
-    {"ins-hz",          1, (void *)&prcopt_.insopt.hz,       "" },
-    {"ins-nhz",         1, (void *)&prcopt_.insopt.nhz,      "" },
-    {"ins-lcopt",       0, (void *)&prcopt_.insopt.lcopt,    "" },
-    {"ins-usecam",      0, (void *)&prcopt_.insopt.usecam,   "" },
-    {"ins-pose-aid",    0, (void *)&prcopt_.insopt.pose_aid, "" },
-    {"ins-align-dualant",0,(void *)&prcopt_.insopt.align_dualants,""},
-    {"ins-mis-v2b-euler1",1,(void *)&prcopt_.insopt.mis_euler[0], ""},
-    {"ins-mis-v2b-euler2",1,(void *)&prcopt_.insopt.mis_euler[1], ""},
-    {"ins-mis-v2b-euler3",1,(void *)&prcopt_.insopt.mis_euler[2], ""},
-
-    {"ins-uncatt",      1, (void *)&prcopt_.insopt.unc.att,  "" },
-    {"ins-uncvel",      1, (void *)&prcopt_.insopt.unc.vel,  "" },
-    {"ins-uncpos",      1, (void *)&prcopt_.insopt.unc.pos,  "" },
-    {"ins-uncba",       1, (void *)&prcopt_.insopt.unc.ba,   "" },
-    {"ins-uncbg",       1, (void *)&prcopt_.insopt.unc.bg,   "" },
-    {"ins-uncdt",       1, (void *)&prcopt_.insopt.unc.dt,   "" },
-    {"ins-uncsg",       1, (void *)&prcopt_.insopt.unc.sg,   "" },
-    {"ins-uncsa",       1, (void *)&prcopt_.insopt.unc.sa,   "" },
-    {"ins-uncra",       1, (void *)&prcopt_.insopt.unc.ra,   "" },
-    {"ins-uncrg",       1, (void *)&prcopt_.insopt.unc.rg,   "" },
-    {"ins-unclever",    1, (void *)&prcopt_.insopt.unc.lever,"" },
-    {"ins-uncos",       1, (void *)&prcopt_.insopt.unc.os,   "" },
-    {"ins-uncoa",       1, (void *)&prcopt_.insopt.unc.oa,   "" },
-    {"ins-uncol",       1, (void *)&prcopt_.insopt.unc.ol,   "" },
-    {"ins-uncrr",       1, (void *)&prcopt_.insopt.unc.rr,   "" },
-    {"ins-uncrc",       1, (void *)&prcopt_.insopt.unc.rc,   "" },
-    {"ins-uncma",       1, (void *)&prcopt_.insopt.unc.cma,  "" },
-    {"ins-unvma",       1, (void *)&prcopt_.insopt.unc.vma,  "" },
-
-    {"ins-psd_gyro",    1, (void *)&prcopt_.insopt.psd.gyro, "" },
-    {"ins-psd_accl",    1, (void *)&prcopt_.insopt.psd.accl, "" },
-    {"ins-psd_ba",      1, (void *)&prcopt_.insopt.psd.ba,   "" },
-    {"ins-psd_bg",      1, (void *)&prcopt_.insopt.psd.bg,   "" },
-    {"ins-psd_dt",      1, (void *)&prcopt_.insopt.psd.dt,   "" },
-    {"ins-psd_sg",      1, (void *)&prcopt_.insopt.psd.sg,   "" },
-    {"ins-psd_sa",      1, (void *)&prcopt_.insopt.psd.sa,   "" },
-    {"ins-psd_ra",      1, (void *)&prcopt_.insopt.psd.ra,   "" },
-    {"ins-psd_rg",      1, (void *)&prcopt_.insopt.psd.rg,   "" },
-    {"ins-psd_os",      1, (void *)&prcopt_.insopt.psd.os,   "" },
-    {"ins-psd_oa",      1, (void *)&prcopt_.insopt.psd.oa,   "" },
-    {"ins-psd-ol",      1, (void *)&prcopt_.insopt.psd.ol,   "" },
-    {"ins-psd_clk",     1, (void *)&prcopt_.insopt.psd.clk,  "" },
-    {"ins-psd_clkr",    1, (void *)&prcopt_.insopt.psd.clkr, "" },
-    {"ins-psd_cma",     1, (void *)&prcopt_.insopt.psd.cma, "" },
-    {"ins-psd_vma",     1, (void *)&prcopt_.insopt.psd.vma, "" },
-
-    {"ins-zv_mt",         1, (void *)&prcopt_.insopt.zvopt.mt,          "" },
-    {"ins-zv_ws",         0, (void *)&prcopt_.insopt.zvopt.ws,          "" },
-    {"ins-zv_sp",         1, (void *)&prcopt_.insopt.zvopt.sp,          "" },
-    {"ins-zv_gthres",     1, (void *)&prcopt_.insopt.zvopt.gthres,      "" },
-    {"ins-zv_athres1",    1, (void *)&prcopt_.insopt.zvopt.athres[0],   "" },
-    {"ins-zv_athres2",    1, (void *)&prcopt_.insopt.zvopt.athres[1],   "" },
-    {"ins-zv_athres3",    1, (void *)&prcopt_.insopt.zvopt.athres[2],   "" },
-    {"ins-zv_gyrothres1", 1, (void *)&prcopt_.insopt.zvopt.gyrothres[0],"" },
-    {"ins-zv_gyrothres2", 1, (void *)&prcopt_.insopt.zvopt.gyrothres[1],"" },
-    {"ins-zv_gyrothres3", 1, (void *)&prcopt_.insopt.zvopt.gyrothres[2],"" },
-    {"ins-zv_odt",        1, (void *)&prcopt_.insopt.zvopt.odt,         "" },
-    {"ins-zv_siga",       1, (void *)&prcopt_.insopt.zvopt.sig_a,       "" },
-    {"ins-zv_sigg",       1, (void *)&prcopt_.insopt.zvopt.sig_g,       "" },
-
-    {"ins-zv_gamma1",     1, (void *)&prcopt_.insopt.zvopt.gamma[0],    "" },
-    {"ins-zv_gamma2",     1, (void *)&prcopt_.insopt.zvopt.gamma[1],    "" },
-    {"ins-zv_gamma3",     1, (void *)&prcopt_.insopt.zvopt.gamma[2],    "" },
-    {"ins-zv_gamma4",     1, (void *)&prcopt_.insopt.zvopt.gamma[3],    "" },
-
-    {"ins-odo_dir",       0, (void *)&prcopt_.insopt.odopt.dir,         "" },
-    {"ins-odo_all",       0, (void *)&prcopt_.insopt.odopt.all,         "" },
-    {"ins-odo_res",       1, (void *)&prcopt_.insopt.odopt.res,         "" },
-    {"ins-odo_s",         1, (void *)&prcopt_.insopt.odopt.s,           "" },
-    {"ins-odo_d",         1, (void *)&prcopt_.insopt.odopt.d,           "" },
-    {"ins-odo_odt",       1, (void *)&prcopt_.insopt.odopt.odt,         "" },
-    {"ins-odo_ostd",      1, (void *)&prcopt_.insopt.odopt.ostd,        "" },
-    {"ins-odo_lever1",    1, (void *)&prcopt_.insopt.odopt.lever[0],    "" },
-    {"ins-odo_lever2",    1, (void *)&prcopt_.insopt.odopt.lever[1],    "" },
-    {"ins-odo_lever3",    1, (void *)&prcopt_.insopt.odopt.lever[2],    "" },
-
-    {"ins-vo-aid-calib-f",      1, (void *)&prcopt_.insopt.voopt.calib.f,     "" },
-    {"ins-vo-aid-calib-fu",     1, (void *)&prcopt_.insopt.voopt.calib.fu,    "" },
-    {"ins-vo-aid-calib-fv",     1, (void *)&prcopt_.insopt.voopt.calib.fv,    "" },
-    {"ins-vo-aid-calib-cu",     1, (void *)&prcopt_.insopt.voopt.calib.cu,    "" },
-    {"ins-vo-aid-calib-cv",     1, (void *)&prcopt_.insopt.voopt.calib.cv,    "" },
-    {"ins-vo-aid-height",       1, (void *)&prcopt_.insopt.voopt.height,      "" },
-    {"ins-vo-aid-inlier-thres", 1, (void *)&prcopt_.insopt.voopt.inlier_thres,"" },
-    {"ins-vo-aid-motion-thres", 1, (void *)&prcopt_.insopt.voopt.motion_thres,"" },
-    {"ins-vo-aid-ransac-iters", 0, (void *)&prcopt_.insopt.voopt.ransac_iters,"" },
-    {"ins-vo-aid-lever1",       1, (void *)&prcopt_.insopt.voopt.lever[0],    "" },
-    {"ins-vo-aid-lever2",       1, (void *)&prcopt_.insopt.voopt.lever[1],    "" },
-    {"ins-vo-aid-lever3",       1, (void *)&prcopt_.insopt.voopt.lever[2],    "" },
-    {"ins-vo-aid-rpy1",         1, (void *)&prcopt_.insopt.voopt.rpy[0],      "" },
-    {"ins-vo-aid-rpy2",         1, (void *)&prcopt_.insopt.voopt.rpy[1],      "" },
-    {"ins-vo-aid-rpy3",         1, (void *)&prcopt_.insopt.voopt.rpy[2],      "" },
-    {"ins-vo-aid-mode",         0, (void *)&prcopt_.insopt.voopt.mode,        "" },
-    {"ins-vo-aid-bucket-w",     1, (void *)&prcopt_.insopt.voopt.bucket.w,    "" },
-    {"ins-vo-aid-bucket-h",     1, (void *)&prcopt_.insopt.voopt.bucket.h,    "" },
-    {"ins-vo-aid-bucket-nmax",  0, (void *)&prcopt_.insopt.voopt.bucket.nmax, "" },
-
-    {"",0,NULL,""}
 };
 /* discard space characters at tail ------------------------------------------*/
 static void chop(char *str)
@@ -357,12 +196,11 @@ static void chop(char *str)
 /* enum to string ------------------------------------------------------------*/
 static int enum2str(char *s, const char *comment, int val)
 {
-    char str[32],*p,*q,com[1024];
+    char str[32],*p,*q;
     int n;
-
-    strcpy(com,comment);
+    
     n=sprintf(str,"%d:",val);
-    if (!(p=strstr(com,str))) {
+    if (!(p=strstr(comment,str))) {
         return sprintf(s,"%d",val);
     }
     if (!(q=strchr(p+n,','))&&!(q=strchr(p+n,')'))) {
@@ -384,7 +222,7 @@ static int str2enum(const char *str, const char *comment, int *val)
        for (p-=2;'0'<=*p&&*p<='9';p--) ;
        return sscanf(p+1,"%d",val)==1;
     }
-    sprintf(s,"%30.30s:",str);
+    sprintf(s,"%.30s:",str);
     if ((p=strstr(comment,s))) { /* number */
         return sscanf(p,"%d",val)==1;
     }
@@ -706,15 +544,4 @@ extern void setsysopts(const prcopt_t *prcopt, const solopt_t *solopt,
     if (solopt) solopt_=*solopt;
     if (filopt) filopt_=*filopt;
     sysopts2buff();
-}
-/* rtk position settings------------------------------------------------------
- * args   : prcopt_t *prcopt I  processing options (NULL: default)
- *          solopt_t *solopt I  solution options   (NULL: default)
- *          filopt_t *filopt I  file options       (NULL: default)
- * return : none
- * notes  : to save system options, use saveopts() after calling the function
- * ---------------------------------------------------------------------------*/
-extern void rtk_debug_opt(prcopt_t *prcopt_,solopt_t *solopt_,filopt_t *filopt_)
-{
-    trace(3,"rtk_debug_opt:\n");
 }

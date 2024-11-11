@@ -1,6 +1,8 @@
 /*------------------------------------------------------------------------------
 * tle.c: NORAD TLE (two line element) functions
 *
+*          Copyright (C) 2012-2020 by T.TAKASU, All rights reserved.
+*
 * references:
 *     [1] F.R.Hoots and R.L.Roehrich, Spacetrack report No.3, Models for
 *         propagation of NORAD element sets, December 1980
@@ -12,8 +14,9 @@
 * history : 2012/11/01 1.0  new
 *           2013/01/25 1.1  fix bug on binary search
 *           2014/08/26 1.2  fix bug on tle_pos() to get tle by satid or desig
+*           2020/11/30 1.3  fix problem on duplicated names in a satellite
 *-----------------------------------------------------------------------------*/
-#include "navlib.h"
+#include "rtklib.h"
 
 /* SGP4 model propagator by STR#3 (ref [1] sec.6,11) -------------------------*/
 
@@ -420,11 +423,11 @@ extern int tle_read(const char *file, tle_t *tle)
         else if (buff[0]) {
             
             /* satellite name in three line format */
-            strcpy(data.name,buff);
+            strcpy(data.alias,buff);
             
             /* omit words in parentheses */
-            if ((p=strchr(data.name,'('))) *p='\0';
-            chop(data.name);
+            if ((p=strchr(data.alias,'('))) *p='\0';
+            chop(data.alias);
             line=0;
         }
     }
@@ -452,6 +455,7 @@ extern int tle_read(const char *file, tle_t *tle)
 extern int tle_name_read(const char *file, tle_t *tle)
 {
     FILE *fp;
+    tled_t data;
     char *p,buff[256],name[256],satno[256],desig[256];
     int i;
     
@@ -476,8 +480,18 @@ extern int tle_name_read(const char *file, tle_t *tle)
             trace(4,"no tle data: satno=%s desig=%s\n",satno,desig);
             continue;
         }
-        strncpy(tle->data[i].name,name,31);
-        tle->data[i].name[31]='\0';
+        if (!*tle->data[i].name) {
+            strncpy(tle->data[i].name,name,31);
+            tle->data[i].name[31]='\0';
+        }
+        else {
+            data=tle->data[i];
+            strncpy(data.name,name,31);
+            data.name[31]='\0';
+            if (!add_data(tle,&data)) {
+                break;
+            }
+        }
     }
     fclose(fp);
     
