@@ -1039,6 +1039,18 @@ extern void adjustimu(const prcopt_t *opt,imud_t *imu)
 
     trace(3,"adjustimu:\n");
 
+    if (opt->insopt.SINS_RotAngle_IMU[0]!=0||opt->insopt.SINS_RotAngle_IMU[0]!=0||opt->insopt.SINS_RotAngle_IMU[0]!=0) {
+    double Cbv[9];
+
+
+
+    }
+
+
+
+
+
+
     if (opt->insopt.imucoors==IMUCOOR_RFU) { /* convert to frd-ned-frame */
         matcpy(gyro,imu->gyro,1,3);
         matcpy(accl,imu->accl,1,3);
