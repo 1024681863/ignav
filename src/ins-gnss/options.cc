@@ -405,7 +405,7 @@ extern opt_t *searchopt(const char *name, const opt_t *opts)
     int i;
     
     trace(3,"searchopt: name=%s\n",name);
-
+    
     for (i=0;*opts[i].name;i++) {
         if (strstr(opts[i].name,name)) return (opt_t *)(opts+i);
     }

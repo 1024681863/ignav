@@ -2007,12 +2007,7 @@ extern double timediff(gtime_t t1, gtime_t t2)
 * return : current time in utc
 *-----------------------------------------------------------------------------*/
 static double timeoffset_=0.0;        /* time offset (s) */
-/*
-*在 C 语言中，使用 extern 关键字声明的变量是外部变量，表示该变量在其他文件中定义。
-*extern 关键字在 C 语言中用于声明外部变量或函数，使得它们可以在多个文件中共享和使用。
-*extern 主要用于实现模块化编程和代码的分离。
-*extern 变量的声明和定义通常放在不同的文件中。
- */
+
 extern gtime_t timeget(void)
 {
     gtime_t time;
@@ -2026,39 +2021,19 @@ extern gtime_t timeget(void)
 #else
     struct timeval tv;
     struct tm *tt;
-    //在C语言中可以使用函数gettimeofday()函数来得到精确时间。它的精度可以达到微妙，是C标准库的函数。
-    //gettimeofday()会把目前的时间用tv 结构体返回，当地时区的信息则放到tz所指的结构中
-    //在使用gettimeofday()函数时，第二个参数一般都为空，因为我们一般都只是为了获得当前时间，而不用获得timezone的数值。
-
-    //C 库函数 struct tm *gmtime(const time_t *timer) 使用 timer 的值来填充 tm 结构，并用协调世界时（UTC）也被称为格林尼治标准时间（GMT）表示。
-    /*struct tm {
-    int tm_sec;         /* 秒，范围从 0 到 59
-    int tm_min;         /* 分，范围从 0 到 59
-    int tm_hour;        /* 小时，范围从 0 到 23
-    int tm_mday;        /* 一月中的第几天，范围从 1 到 31
-    int tm_mon;         /* 月份，范围从 0 到 11
-    int tm_year;        /* 自 1900 起的年数
-    int tm_wday;        /* 一周中的第几天，范围从 0 到 6
-    int tm_yday;        /* 一年中的第几天，范围从 0 到 365
-    int tm_isdst;       /* 夏令时
-    }; */
-
+    
     if (!gettimeofday(&tv,NULL)&&(tt=gmtime(&tv.tv_sec))) {
-        ep[0]=tt->tm_year+1900; ep[1]=tt->tm_mon+1;
-        ep[2] = tt->tm_mday;
-        ep[3] = tt->tm_hour;
-        ep[4] = tt->tm_min;
-        ep[5] = tt->tm_sec + tv.tv_usec * 1E-6;
+        ep[0]=tt->tm_year+1900; ep[1]=tt->tm_mon+1; ep[2]=tt->tm_mday;
+        ep[3]=tt->tm_hour; ep[4]=tt->tm_min; ep[5]=tt->tm_sec+tv.tv_usec*1E-6;
     }
 #endif
-    time = epoch2time(ep);
-
+    time=epoch2time(ep);
+    
 #ifdef CPUTIME_IN_GPST /* cputime operated in gpst */
-    time = gpst2utc(time);
+    time=gpst2utc(time);
 #endif
-    return timeadd(time, timeoffset_);
+    return timeadd(time,timeoffset_);
 }
-
 /* set current time in utc -----------------------------------------------------
 * set current time in utc
 * args   : gtime_t          I   current time in utc
@@ -3556,13 +3531,9 @@ extern void traceopen(const char *file)
     char path[1024];
     
     reppath(file,path,time,"","");
-    //任何一个C语言程序，只要运行起来都会默认打开3个流：
-    //FILE * stdin-标准输入流（键盘）
-    //FILE * stdout-标准输出流（屏幕）
-    //FILE * strerr-标准错误流(屏幕)
-    if (!*path || !(fp_trace = fopen(path, "w"))) fp_trace = stderr;
-    strcpy(file_trace, file);
-    tick_trace = tickget();
+    if (!*path||!(fp_trace=fopen(path,"w"))) fp_trace=stderr;
+    strcpy(file_trace,file);
+    tick_trace=tickget();
     time_trace=time;
     initlock(&lock_trace);
 }
@@ -3961,7 +3932,6 @@ static int repstr(char *str, const char *pat, const char *rep)
     return 1;
 }
 /* replace keywords in file path -----------------------------------------------
-* 更改文件名字的日期时间以及观测站名字
 * replace keywords in file path with date, time, rover and base station id
 * args   : char   *path     I   file path (see below)
 *          char   *rpath    O   file path in which keywords replaced (see below)
@@ -3988,7 +3958,6 @@ static int repstr(char *str, const char *pat, const char *rep)
 *              %t -> mm   : 15 minutes      (00,15,30,45)
 *              %r -> rrrr : rover id
 *              %b -> bbbb : base station id
-*
 *-----------------------------------------------------------------------------*/
 extern int reppath(const char *path, char *rpath, gtime_t time, const char *rov,
                    const char *base)
