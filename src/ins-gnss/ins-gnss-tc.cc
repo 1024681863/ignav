@@ -21,7 +21,7 @@
 #define MINVEL       3.0          /* min velocity for initial ins states */
 #define MAXGYRO      (30.0*D2R)   /* max rotation speed value for initial */
 #define MAXDIFF      30.0         /* max time difference between solution */
-#define REBOOT       0            /* ins tightly coupled reboot if always update fail */
+#define REBOOT       1            /* ins tightly coupled reboot if always update fail */
 #define CHKNUMERIC   1            /* check numeric for given value */
 
 /* solution convert to velocity----------------------------------------------*/

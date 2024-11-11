@@ -1030,7 +1030,7 @@ extern int input_raw(raw_t *raw, int format, unsigned char data)
         case STRFMT_OEM6_POSE:return input_oem6_pose  (raw,data);
         case STRFMT_OEM6_RAW: return input_oem6_raw   (raw,data);
         case STRFMT_ZHUFENG: return input_zhufeng_raw (raw,data);
-        case STRFMT_BEIYUN: return input_beiyun_raw (raw,data);
+
 
     }
     return 0;

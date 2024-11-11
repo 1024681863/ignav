@@ -255,7 +255,7 @@ extern "C"{
 #define MAXOBSTYPE  64                  /* max number of obs type in RINEX */
 
 #ifdef  OBS_200HZ
-#define DTTOL       0.00005              /* tolerance of time difference (s) */
+#define DTTOL       0.0025              /* tolerance of time difference (s) */
 #else
 #define DTTOL       0.005               /* tolerance of time difference (s) */
 #endif
@@ -540,7 +540,6 @@ extern "C"{
 #define STRFMT_OEM6_POSE 35             /* stream format: NovAtel OEM6 dual ant. pose measurement */
 #define STRFMT_OEM6_RAW  36             /* stream format: NovAtel OEM6 raw observation data */
 #define STRFMT_ZHUFENG   37             /* 朱峰老师惯导数据集imu数据 */
-#define STRFMT_BEIYUN    38             /* beiyun imu数据 */
 
 #define GROUND_TRUTH_KARL  1            /* Karlsruhe dataset ground truth solution format */
 #define GROUND_TRUTH_EUROC 2            /* EuRoC MAV dataset ground truth solution format */
@@ -1163,7 +1162,7 @@ typedef struct {            /* ins options type */
     int transmit_corr;      /* transmit error state correction (dx_t=(I+F*dt)dx_t_1) */
 
     gtime_t ext[16][2];     /* exclude time for processing ins measurement data,[0]: start time,[1]: end time */
-    double SINS_RotAngle_IMU[3]; /*初始化imu旋转角*/
+
     double lever[3];        /* lever arm terms of body-frame to gnss antenna */
     double mis_euler[3];    /* misalignment euler angle from v-frame (defined in dual ant.) to b-frame */
     double len;             /* length of dual antennas (m) */
@@ -2287,7 +2286,6 @@ typedef struct {        /* RTK server type */
     int navsel;         /* ephemeris select (0:all,1:rover,2:base,3:corr) */
     int nsbs;           /* number of sbas message */
     int nsol;           /* number of solution buffer */
-    int k[7];           // 读取文件计数
     int nb [7];         /* bytes in input buffers {rov,base,corr,sol,imu,image} */
     int nsb[2];         /* bytes in solution buffers */
     int npb[7];         /* bytes in input peek buffers {rov,base,corr,sol,imu,image} */
@@ -2733,7 +2731,6 @@ EXPORT int input_malaga_gnss(raw_t *raw, unsigned char data);
 EXPORT int input_malaga_imu (raw_t *raw, unsigned char data);
 EXPORT int input_malaga_img (raw_t *raw, unsigned char data);
 EXPORT int input_zhufeng_raw(raw_t *raw, unsigned char data);
-    EXPORT int input_beiyun_raw(raw_t *raw, unsigned char data);
 
 
 EXPORT int input_oem6f_sol (raw_t *raw, FILE *fp);

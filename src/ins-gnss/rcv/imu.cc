@@ -5,19 +5,13 @@
 * history : 2017/11/06  1.0  new
 *-----------------------------------------------------------------------------*/
 #include <navlib.h>
-#include <string.h>
+
 /* constants/macros ----------------------------------------------------------*/
 #define NUMBYTES_GI310  43                      /* numbers of bytes of gi310 imu raw data */
 #define MAXDIFFTIME     10.0                    /* max time difference to reset  */
-#define NUMBYTES_ZHUFENG  32                      /* numbers of bytes of zhufeng imu raw data */
-#define NUMBYTES_BEIYUN  160                      /* numbers of bytes of beiyun imu raw data */
-
-
+#define NUMBYTES_ZHUFENG  32                      /* numbers of bytes of gi310 imu raw data */
 const unsigned char gi310_head[2]={0x55,0xAA};  /* imu message header */
 const unsigned char zhufeng_head[2]={0x24,0x49};  /* imu message header */
-const unsigned char beiyun_head[11]={"#RAWIMUXA"};  /* imu message header */
-
-
 /* get fields (little-endian) ------------------------------------------------*/
 #define U1(p) (*((unsigned char *)(p)))
 #define I1(p) (*((char *)(p)))
@@ -167,77 +161,7 @@ static int decode_imu_m39(raw_t *raw, unsigned char data)
         raw->nbyte=0; return -1; /* checksum fail */
     }
 }
-/* decode M39 IMU GI310 data ------------------------------------------------*/
-static int decode_imu_beiyun(raw_t *raw, unsigned char data)
-{
-    trace(3,"decode_imu_beiyun:\n");
 
-
-    raw->buff[raw->nbyte++]=data;
-
-    if (raw->nbyte<11) return 0; /* synchronize frame */
-
-    if (!chkhead(raw->buff,beiyun_head)) {raw->nbyte=0; return 0;}
-    char c=(char)data;
-    char s='\n';
-    if (c!=s) return 0;
-        raw->imut.n=0;
-        double gyro = 2.31193542480469e-07;
-        double accel = 3.740940093994136e-08;
-        double zacc,yacc,xacc,zgyro,ygyro,xgyro,week,sow;
-        char temp[raw->nbyte-77]={};
-        memcpy(&temp,raw->buff+76,raw->nbyte-77);
-        raw->nbyte=0;
-        char *token;
-        const char d[2] = ",";
-        token=strtok(temp,d);
-        week=atof(token);
-        token = strtok(NULL, d);
-        sow= atof(token);
-        token = strtok(NULL, d);
-        token = strtok(NULL, d);
-        zacc=atof(token);
-        token = strtok(NULL, d);
-        yacc=atof(token);
-        token = strtok(NULL, d);
-        xacc=atof(token);
-        token = strtok(NULL, d);
-        zgyro=atof(token);
-        token = strtok(NULL, d);
-        ygyro=atof(token);
-        const char dd[2]="*";
-        token = strtok(NULL, dd);
-        xgyro=atof(token);
-    raw->insData.gt =sow;
-
-    if (raw->insData.gt > raw->insData.gtPre)
-    {  raw->imu.time= gpst2time(week,raw->insData.gt);
-        raw->imu.gyro[0] = xgyro*gyro;raw->imu.gyro[1] = ygyro*gyro;raw->imu.gyro[2] =zgyro*gyro;
-        raw->imu.accl[0] = xacc*accel;raw->imu.accl[1] = yacc*accel;raw->imu.accl[2] = zacc*accel;
-        raw->insData.gtPre = raw->insData.gt;
-
-    }
-    else if (isEqual(raw->insData.gt,raw->insData.gtPre))
-    {
-        trace(3,"IMU data: data duplication --- %.4f.\n", raw->insData.gt);
-        return 0;
-    }
-    else
-    {    /* current and precious time difference is too large */
-        trace(3, "IMU data: previous %.4f is greater than current %.4f.\n", raw->insData.gtPre, raw->insData.gt);
-        return 0;
-    }
-/* add imu measurement data */
-    addimudata(&raw->imut,&raw->imu);
-
-
-    return raw->insData.gt>0.0?4:0;
-
-
-
-
-
-}
 static int decode_imu_zhufeng(raw_t *raw, unsigned char data)
 {
     trace(3,"decode_imu_zhufeng:\n");
@@ -374,19 +298,6 @@ static int decode_imu_zhufengb(raw_t *raw, unsigned char data)
     raw->imut.n=0;
     return nextimub(&raw->imub,&raw->imut,&raw->curb);
 }
-static int decode_imu_beiyunb(raw_t *raw, unsigned char data)
-{
-    if (raw->imub.n==0) {
-        prcopt_t *opt=(prcopt_t *)raw->optp;
-        stream_t *str=(stream_t *)raw->strp;
-        readimub(str->path,&raw->imub,opt->insopt.imudecfmt,opt->insopt.imuformat,
-                 opt->insopt.imucoors,opt->insopt.imuvalfmt);
-
-        raw->curb=raw->imub.n-1;
-    }
-    raw->imut.n=0;
-    return nextimub(&raw->imub,&raw->imut,&raw->curb);
-}
 
 
 
@@ -411,13 +322,6 @@ extern int  input_zhufeng_raw(raw_t *raw, unsigned char data)
     else           return decode_imu_zhufeng(raw,data);
 }
 
-extern int  input_beiyun_raw(raw_t *raw, unsigned char data)
-{
-    trace(3," input_zhufeng_raw: data=%02X\n",data);
-    raw->len=NUMBYTES_BEIYUN;
-    if (raw->dire) return decode_imu_beiyunb(raw,data);
-    else           return decode_imu_beiyun(raw,data);
-}
 
 
 

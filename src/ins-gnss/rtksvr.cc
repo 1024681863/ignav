@@ -493,7 +493,7 @@ static int inputobs(rtksvr_t *svr,obsd_t *obs)
     }
     /* check position mode if need base observation */
     switch (svr->rtk.opt.mode) {
-        case PMODE_SINGLE    : (svr->syn.rover++);svr->syn.rover%=MAXOBSBUF;return nr;
+        case PMODE_SINGLE    :svr->syn.rover++; return nr;
         case PMODE_PPP_KINEMA: return nr;
         case PMODE_PPP_STATIC: return nr;
         case PMODE_PPP_FIXED : return nr;
@@ -504,46 +504,20 @@ static int inputobs(rtksvr_t *svr,obsd_t *obs)
         return 0;
     }
     /* search base observation data by rover obs time */
-for (i=0,bobs=svr->obs[1],n=NS(svr->syn.base,svr->syn.nb,MAXOBSBUF);i<n+1&&nr;i++) {
+    for (i=0,bobs=svr->obs[1],n=NS(svr->syn.base,svr->syn.nb,MAXOBSBUF);
+         i<n+1&&nr;i++) {
 
         j=svr->syn.base+i;
         if (j>=MAXOBSBUF) j%=MAXOBSBUF;
 
         if (fabs(timediff(bobs[j].data[0].time,obs[0].time))<DTTOLM) {
-            for (nb=0,k=0;k<bobs[j].n;k++) {
+            for (nb=0,k=0;k<bobs[i].n;k++) {
                 obs[nr+nb++]=bobs[j].data[k];
             }
-            //update base sync index*/
+            /* update base sync index */
             if (nb) svr->syn.base=j; break;
         }
-         }
-
- /*   int c=0;bobs=svr->obs[1];
-    while(nb<=0){
-        if (c>=MAXOBSBUF) c%=MAXOBSBUF;
-        if (c!=0&&robs[svr->syn.rover+c].n>0) {
-                    for (nr=0,i=0;i<robs[svr->syn.rover+c].n;i++) {
-                        obs[nr++]=robs[svr->syn.rover+c++].data[i];
-                    }
-        }
-        for (i=0,n=NS(svr->syn.base,svr->syn.nb,MAXOBSBUF);i<n+1&&nr;i++) {
-            j=svr->syn.base+i;
-            if (j>=MAXOBSBUF) j%=MAXOBSBUF;
-            if (fabs(timediff(bobs[j].data[0].time,obs[0].time))<DTTOLM) {
-                for (nb=0,k=0;k<bobs[i].n;k++) {
-                    obs[nr+nb++]=bobs[j].data[k];
-                }
-                /* update base sync index
-                if (nb) svr->syn.base=j;svr->syn.rover+=c; break;
-            }
-        }
-        c++;
-    }*/
-
-
-
-
-
+    }
 #if REALTIME
     if ((svr->syn.rover+=(nr>0))>=MAXOBSBUF) {
         svr->syn.rover%=MAXOBSBUF;
@@ -558,8 +532,7 @@ for (i=0,bobs=svr->obs[1],n=NS(svr->syn.base,svr->syn.nb,MAXOBSBUF);i<n+1&&nr;i+
     /* check number of base observation data */
     if (nb<=0) {
         trace(2,"no match base observation data\n");
-        (svr->syn.rover++);svr->syn.rover%=MAXOBSBUF;
-        return nr;
+        return 0;
     }
 #endif
     return nr+nb;
@@ -581,9 +554,9 @@ static int inputobstc(rtksvr_t *svr,gtime_t time,obsd_t *obs)
         j=svr->syn.rover+i;
 
         if (j>=MAXOBSBUF) j=j%MAXOBSBUF;
-       /* if (dt&&fabs(dt)<fabs(timediff(time,robs[j].data[0].time))) {
+        if (dt&&fabs(dt)<fabs(timediff(time,robs[j].data[0].time))) {
             break;
-        }*/
+        }
         if (fabs((dt=timediff(time,robs[j].data[0].time)))<DTTOL
             &&robs[j].n!=0) {
             for (k=0,m=0;k<robs[j].n;k++) obs[m++]=robs[j].data[k];
@@ -598,9 +571,9 @@ static int inputobstc(rtksvr_t *svr,gtime_t time,obsd_t *obs)
             j=svr->syn.base+i;
 
             if (j>=MAXOBSBUF) j=j%MAXOBSBUF;
-            /*if (dt&&fabs(dt)<fabs(timediff(tr,bobs[j].data[0].time))) {
+            if (dt&&fabs(dt)<fabs(timediff(tr,bobs[j].data[0].time))) {
                 break;
-            }*/
+            }
             if (fabs((dt=timediff(tr,bobs[j].data[0].time)))<DTTOLM
                 &&bobs[j].n!=0) {
                 for (k=0;k<bobs[j].n;k++) obs[m++]=bobs[j].data[k];
@@ -741,7 +714,7 @@ static int decoderaw(rtksvr_t *svr, int index)
     pose_meas_t *pose=NULL;
     sbsmsg_t *sbsmsg=NULL;
     int i,j,ret=0,sat,k=0,fobs=0;
-
+    
     tracet(4,"decoderaw: index=%d\n",index);
     
     rtksvrlock(svr);
@@ -803,11 +776,11 @@ static int decoderaw(rtksvr_t *svr, int index)
             for (j=0;j<imu->n;j++) {
                 adjustimu(&svr->rtk.opt,&imu->data[j]);
                 //imu是否需要内插
-                if ((imu->data[j].time.sec<(1/svr->rtk.opt.insopt.hz))&&(imu->data[j].time.sec>0.0001)&&fobs>1) {
-                        imud_t midimu={0};
+                if ((imu->data[j].time.sec<(1/svr->rtk.opt.insopt.hz))&&fobs>1) {
+                        imud_t midimu;
                         gtime_t timestamp={0};
                         timestamp.time=imu->data[j].time.time;
-                        double lamda=timediff(timestamp,svr->imu[fobs%MAXIMUBUF-1].time)/timediff(imu->data[j].time,imu->data[j-1].time);
+                        double lamda=timediff(timestamp,svr->imu[fobs%MAXIMUBUF].time)/timediff(imu->data[j].time,imu->data[j-1].time);
                         midimu.time=timestamp;
                         for (int kk=0;kk<3;kk++) {
                             midimu.accl[kk]=imu->data[j].accl[kk]*lamda;
@@ -903,7 +876,8 @@ static int decoderaw(rtksvr_t *svr, int index)
         case 4: k=MIN(NE(fobs%MAXIMUBUF,svr->syn.imu  ,MAXIMUBUF),MAXIMU); break;
         case 5: k=MIN(NE(fobs%MAXIMGBUF,svr->syn.img  ,MAXIMGBUF),MAXIMG); break;
         case 6: k=MIN(NE(fobs%MAXPOSEBUF,svr->syn.pose,MAXPOSEBUF),MAXPOSE); break;
-    }    svr->nb[index]=0;
+    }
+    svr->nb[index]=0;
     rtksvrunlock(svr);
     return k;
 }
@@ -1456,7 +1430,7 @@ static void *rtksvrthread(void *arg)
             }
             else {
                 /* decode receiver raw/rtcm data */
-                if (svr->format[i]==STRFMT_ZHUFENG||svr->format[i]==STRFMT_BEIYUN) {
+                if (svr->format[i]==STRFMT_ZHUFENG) {
                     svr->raw[i].time=svr->raw[0].time;
                 }
                 fobs[i]=decoderaw(svr,i);
@@ -1486,7 +1460,6 @@ static void *rtksvrthread(void *arg)
 
             /* input rover and base observation data */
             if (!(obss[i].n=inputobs(svr,obss[i].data))) {
-
                 continue;
             }
             /* carrier-phase bias correction */
@@ -1616,7 +1589,7 @@ static void *rtksvrthread(void *arg)
             i++,j=INSUPD_TIME) {
 
             /* match observation data */
-             if ((obsd.n=inputobstc(svr,imus.data[i].time,obsd.data))) {
+            if ((obsd.n=inputobstc(svr,imus.data[i].time,obsd.data))) {
                 j=INSUPD_MEAS;
             }
             /* initial ins states */

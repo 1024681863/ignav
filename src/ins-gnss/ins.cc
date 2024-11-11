@@ -1035,25 +1035,18 @@ extern void adjustimu(const prcopt_t *opt,imud_t *imu)
 
     trace(3,"adjustimu:\n");
 
-    if (opt->insopt.SINS_RotAngle_IMU[0]!=0||opt->insopt.SINS_RotAngle_IMU[1]!=0||opt->insopt.SINS_RotAngle_IMU[2]!=0) {
-        double Cbv[9];
-        double sin_gamma=sin(opt->insopt.SINS_RotAngle_IMU[0]),cos_gamma=cos(opt->insopt.SINS_RotAngle_IMU[0]),
-           sin_beta=sin(opt->insopt.SINS_RotAngle_IMU[1]),cos_beta=cos(opt->insopt.SINS_RotAngle_IMU[1]),
-           sin_alpha=sin(opt->insopt.SINS_RotAngle_IMU[2]),cos_alpha=cos(opt->insopt.SINS_RotAngle_IMU[2]);
-        Cbv[0]= cos_alpha*cos_beta-sin_alpha*sin_beta*sin_gamma;
-        Cbv[3]= sin_alpha*cos_beta+cos_alpha*sin_beta*sin_gamma;
-        Cbv[6]=-sin_beta*cos_gamma;
-        Cbv[1]=-sin_alpha*cos_gamma;
-        Cbv[4]= cos_alpha*cos_gamma;
-        Cbv[7]= sin_gamma;
-        Cbv[2]= cos_alpha*sin_beta+sin_alpha*sin_gamma*cos_beta;
-        Cbv[5]= sin_alpha*sin_beta-cos_alpha*sin_gamma*cos_beta;
-        Cbv[8]= cos_beta*cos_gamma;
-        matcpy(gyro,imu->gyro,1,3);
-        matcpy(accl,imu->accl,1,3);
-        matmul("NN",3,1,3,1.0,Cbv,gyro,0.0,imu->gyro);
-        matmul("NN",3,1,3,1.0,Cbv,accl,0.0,imu->accl);
+    if (opt->insopt.SINS_RotAngle_IMU[0]!=0||opt->insopt.SINS_RotAngle_IMU[0]!=0||opt->insopt.SINS_RotAngle_IMU[0]!=0) {
+    double Cbv[9];
+
+
+
     }
+
+
+
+
+
+
     if (opt->insopt.imucoors==IMUCOOR_RFU) { /* convert to frd-ned-frame */
         matcpy(gyro,imu->gyro,1,3);
         matcpy(accl,imu->accl,1,3);

@@ -16,7 +16,7 @@
 #include <navlib.h>
 
 /* constants ----------------------------------------------------------------*/
-#define MAXSOL       3                  /* max number of solution data */
+#define MAXSOL       5                  /* max number of solution data */
 #define MINVEL       5.0                /* min velocity for initial ins states */
 #define MAXGYRO      (30.0*D2R)         /* max rotation speed value for initial */
 #define MAXVAR_POSE  SQR(5.0*D2R)       /* max variance of pose measurement */
